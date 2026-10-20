@@ -31,7 +31,7 @@ module.exports=async(req,res)=>{
     }
   }catch(e){dbg.error=String(e)}
   if(debug)return res.status(200).json({title,desc,img,dbg});
-  const meta=`<meta property="og:site_name" content="Skim"><meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:image" content="${esc(img)}"><meta property="og:url" content="${esc(origin+pagePath)}"><meta name="theme-color" content="#fffcfc"><meta name="twitter:card" content="${big?"summary_large_image":"summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}">`;
+  const meta=`<meta property="og:site_name" content="Skim"><meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:image" content="${esc(img)}"><meta property="og:url" content="${esc(origin+pagePath)}"><meta name="theme-color" content="#000a4f"><meta name="twitter:card" content="${big?"summary_large_image":"summary"}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}">`;
   res.setHeader("Content-Type","text/html; charset=utf-8");
   res.setHeader("Cache-Control","public, s-maxage=30, stale-while-revalidate=120");
   res.status(200).send(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>${meta}</head><body><a href="${esc(origin+pagePath)}">${esc(title)}</a></body></html>`);
