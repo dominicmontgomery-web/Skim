@@ -1,5 +1,4 @@
 {
-  "functions": { "api/post.js": { "includeFiles": "config.js" } },
   "rewrites": [
     { "source": "/post/:id", "has": [{ "type": "header", "key": "user-agent", "value": ".*(Discordbot|Twitterbot|facebookexternalhit|Slackbot|TelegramBot|WhatsApp|LinkedInBot|Mastodon|Embedly).*" }], "destination": "/api/post?id=:id" },
     { "source": "/@:u", "has": [{ "type": "header", "key": "user-agent", "value": ".*(Discordbot|Twitterbot|facebookexternalhit|Slackbot|TelegramBot|WhatsApp|LinkedInBot|Mastodon|Embedly).*" }], "destination": "/api/post?u=:u" },
