@@ -24,7 +24,7 @@ module.exports=async(req,res)=>{
       const row=Array.isArray(j)&&j[0];
       if(row){
         const a=row.profiles||row;
-        title=`${a.display_name} (@${a.username}) on Skim`;
+        title=`${a.display_name} (@${a.username})`;
         desc=(id?(row.content||"Shared an image"):(row.bio||"Profile on Skim")).slice(0,200);
         if(id&&row.images&&row.images[0]){img=row.images[0];big=true}else if(a.avatar_url)img=a.avatar_url;
       }
