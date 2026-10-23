@@ -1,5 +1,5 @@
 // Link previews (Discord, Twitter, Slack...). Only link-preview bots are routed here (see vercel.json); people get the normal app.
-const V="v6-blue-article";
+const V="v7-no-avatar-image";
 const fs=require("fs"),path=require("path");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function cfg(origin){
@@ -27,18 +27,17 @@ module.exports=async(req,res)=>{
       if(row){
         const a=row.profiles||row;
         title=`${a.display_name} (@${a.username})`;
-        desc=(id?(row.content||""):(row.bio||"")).slice(0,300);
+        desc=(id?(row.content||""):(row.bio||"")).slice(0,700);
         avatar=a.avatar_url;when=row.created_at;
         if(id&&row.images&&row.images.length){imgs=row.images.slice(0,4);big=true}
         if(id){try{const st=await(await fetch(`${url}/rest/v1/post_stats?post_id=eq.${id}&select=like_count,repost_count,reply_count`,{headers})).json();const c=st&&st[0];if(c)desc+=`${desc?"\n\n":""}❤️ ${c.like_count}   🔁 ${c.repost_count}   💬 ${c.reply_count}`}catch(e){}}
       }
     }
   }catch(e){dbg.error=String(e)}
-  if(avatar)imgs.push(avatar);
-  if(!imgs.length)imgs.push(origin+"/logo.png");
+  if(!id&&avatar)imgs.push(avatar);
   if(debug)return res.status(200).json({version:V,title,desc,imgs,dbg});
   const m=(k,v,p)=>`<meta ${p||"property"}="${k}" content="${esc(v)}">`;
-  const meta=m("og:site_name","Skim")+m("og:type","article")+m("og:title",title)+m("og:description",desc)+m("og:url",origin+pagePath)+imgs.map(i=>m("og:image",i)).join("")+(when?m("article:published_time",new Date(when).toISOString()):"")+m("theme-color","#1e3a8a","name")+m("twitter:card",big?"summary_large_image":"summary","name")+m("twitter:title",title,"name")+m("twitter:description",desc,"name")+m("twitter:image",imgs[0],"name")+m("skim-version",V,"name");
+  const meta=m("og:site_name","Skim")+m("og:type","article")+m("og:title",title)+m("og:description",desc)+m("og:url",origin+pagePath)+imgs.map(i=>m("og:image",i)).join("")+(when?m("article:published_time",new Date(when).toISOString()):"")+m("theme-color","#1e3a8a","name")+m("twitter:card",big?"summary_large_image":"summary","name")+m("twitter:title",title,"name")+m("twitter:description",desc,"name")+(imgs.length?m("twitter:image",imgs[0],"name"):"")+m("skim-version",V,"name");
   res.setHeader("Content-Type","text/html; charset=utf-8");
   res.setHeader("Cache-Control","public, s-maxage=30, stale-while-revalidate=120");
   res.status(200).send(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>${meta}</head><body><a href="${esc(origin+pagePath)}">${esc(title)}</a></body></html>`);
