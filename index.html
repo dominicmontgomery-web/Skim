@@ -153,7 +153,7 @@ const PROV=["Aequinoctium","Belgica","Britannia Inferior","Britannia Superior","
 const cname=c=>c==="gaul"?"Gaul":"Vorasnia";
 const AUTHP={gaul:"the Gallic Crown Ministry of Truth",vorasnia:"His Imperial Majesty's Government"};
 const noticeText=(kind,c)=>c==="gaul"?`This ${kind} has been blocked by the Gallic Crown Ministry of Truth.`:"This post or account has been blocked by His Imperial Majesty's Government.";
-const BLK=(z=20)=>`<svg viewBox="0 0 24 24" width="${z}" height="${z}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:none" aria-hidden="true"><path d="M12 3l7.5 2.8v5.4c0 4.6-3.1 8-7.5 9.8-4.4-1.8-7.5-5.2-7.5-9.8V5.8L12 3z"/><path d="M8.2 8.2l7.6 7.6"/></svg>`;
+const BLK=(z=20)=>`<svg viewBox="0 0 24 24" width="${z}" height="${z}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:none" aria-hidden="true"><path d="M12 3l7.5 2.8v5.4c0 4.6-3.1 8-7.5 9.8-4.4-1.8-7.5-5.2-7.5-9.8V5.8L12 3z"/><path d="M5.4 5.4L17.3 17.3"/></svg>`;
 const PIN='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 005 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 const locText=p=>p.country==="gaul"?[p.province,"Gaul"].filter(Boolean).join(", "):[p.constituency,p.region,"Vorasnia"].filter(Boolean).join(", ");
 let blkPosts=new Map(),blkAccts=new Map(),pBlocked=null;
