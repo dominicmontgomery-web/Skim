@@ -26,7 +26,7 @@ module.exports=async(req,res)=>{
       const row=Array.isArray(j)&&j[0];
       if(row){
         const a=row.profiles||row;
-        title=`${a.display_name} (@${a.username}) :governmentbadge:`;
+        title=`${a.display_name} (@${a.username})`;
         desc=(id?(row.content||""):(row.bio||"")).slice(0,700);
         avatar=a.avatar_url;when=row.created_at;
         if(id&&row.images&&row.images.length){const isv=u=>/\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(u);imgs=row.images.filter(u=>!isv(u)).slice(0,4);video=row.images.find(isv)||null;big=true}
