@@ -1,12 +1,5 @@
 // Link previews (Discord, Twitter, Slack...). Only link-preview bots are routed here (see vercel.json); people get the normal app.
-const V="v9-badges";
-// Discord custom emoji for the verified badges. Get each code by typing  \:emojiname:  in Discord and sending it (it turns into <:name:123...>).
-// Paste the codes here, or set EMOJI_BLUE / EMOJI_GRAY / EMOJI_GOLD in Vercel > Settings > Environment Variables.
-const BADGE_EMOJI = {
-  blue: process.env.EMOJI_BLUE || "",   // e.g. <:blueverifiedbadge:123456789012345678>
-  gray: process.env.EMOJI_GRAY || "",   // e.g. <:governmentbadge:123456789012345678>
-  gold: process.env.EMOJI_GOLD || ""    // e.g. <:goldenverifiedbadge:123456789012345678>
-};
+const V="v8-video";
 const fs=require("fs"),path=require("path");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function cfg(origin){
@@ -24,8 +17,8 @@ module.exports=async(req,res)=>{
   try{
     const {url,key}=await cfg(origin);dbg.hasConfig=!!(url&&key);
     let q=null;
-    if(id&&/^[0-9a-f-]{36}$/i.test(id))q=`posts?id=eq.${id}&select=content,images,created_at,profiles:profiles!posts_author_id_fkey(username,display_name,avatar_url,verified_type)`;
-    else if(u&&/^[a-zA-Z0-9_]{3,20}$/.test(u))q=`profiles?username=eq.${u.toLowerCase()}&select=username,display_name,bio,avatar_url,created_at,verified_type`;
+    if(id&&/^[0-9a-f-]{36}$/i.test(id))q=`posts?id=eq.${id}&select=content,images,created_at,profiles:profiles!posts_author_id_fkey(username,display_name,avatar_url)`;
+    else if(u&&/^[a-zA-Z0-9_]{3,20}$/.test(u))q=`profiles?username=eq.${u.toLowerCase()}&select=username,display_name,bio,avatar_url,created_at`;
     if(q&&url&&key){
       const headers={apikey:key};if(key.startsWith("eyJ"))headers.Authorization="Bearer "+key;
       const r=await fetch(`${url}/rest/v1/${q}`,{headers});dbg.status=r.status;
@@ -33,7 +26,7 @@ module.exports=async(req,res)=>{
       const row=Array.isArray(j)&&j[0];
       if(row){
         const a=row.profiles||row;
-        title=`${a.display_name} (@${a.username})`+(BADGE_EMOJI[a.verified_type]?" "+BADGE_EMOJI[a.verified_type]:"");
+        title=`${a.display_name} (@${a.username})`;
         desc=(id?(row.content||""):(row.bio||"")).slice(0,700);
         avatar=a.avatar_url;when=row.created_at;
         if(id&&row.images&&row.images.length){const isv=u=>/\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(u);imgs=row.images.filter(u=>!isv(u)).slice(0,4);video=row.images.find(isv)||null;big=true}
