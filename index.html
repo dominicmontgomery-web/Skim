@@ -530,7 +530,7 @@ async function upImg(bucket,file){if(!file)return null;if(file.size>3e6)throw ne
 function showSettings(){pendAv=null;pendBn=null;const f=$("feed");if(!myProfile){f.innerHTML=themeRow()+'<div class="empty">Log in to edit your profile.</div>';wireTheme();return}f.innerHTML=`<div class="modal" style="box-shadow:none;width:100%"><h2>Settings</h2>${themeRow()}<a class="drow" href="/plans">Plans</a><a class="drow" href="/about">About Skim</a>${isAdm()?'<a class="drow" href="/ads">Manage ads (admin)</a>':""}<h3 style="margin:18px 0 0">Edit profile</h3><div class="field"><label>Display name</label><input id="sName" maxlength="50" value="${safe(myProfile.display_name)}"></div><div class="field"><label>Username</label><input id="sUser" maxlength="20" value="${safe(myProfile.username)}" autocapitalize="none" spellcheck="false"></div><div class="field"><label>Bio</label><input id="sBio" maxlength="280" value="${safe(myProfile.bio)}"></div>${locFields(myProfile)}<div class="imgpick"><div class="bn" id="sBnBox"><span class="cam"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span></div><div class="av" id="sAvBox" style="border-radius:${myProfile.verified_type?"14%":"50%"}"><span class="pv">${safe((myProfile.display_name||"?")[0])}</span><span class="cam" style="width:38px;height:38px"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span></div><input type="file" id="sBnF" accept="image/*" hidden><input type="file" id="sAvF" accept="image/*" hidden></div><button class="primary" id="sSave">Save</button><div class="status" id="sMsg"></div>${myProfile.id!==myProfile.owner_id?`<button class="follow" id="sDel" style="margin-top:14px">Delete this account</button>`:""}</div>`;wireImgs();wireLoc();if($("sDel"))$("sDel").onclick=async()=>{if(!confirm("Delete this account and all its posts? This cannot be undone."))return;const {error}=await sb.from("profiles").delete().eq("id",myProfile.id);if(error)alert(error.message);else{localStorage.removeItem("skimActive");location.href="/"}};wireTheme();if(isAdm()){const box=document.createElement("div");box.id="vlist";box.style.padding="0 25px 25px";f.append(box);loadVerified()}$("sSave").onclick=async()=>{const m=$("sMsg");m.className="status";m.textContent="Saving…";try{const u={display_name:$("sName").value.trim()||myProfile.username,bio:$("sBio").value.trim(),...locValues()};const nu=$("sUser").value.trim().toLowerCase().replace(/^@/,"");if(!/^[a-z0-9_]{3,20}$/.test(nu))throw new Error("Username must be 3–20 characters: letters, numbers, underscores.");if(nu!==myProfile.username)u.username=nu;const a=await upImg("avatars",pendAv),b=await upImg("banners",pendBn);if(a)u.avatar_url=a;if(b)u.banner_url=b;const {error}=await sb.from("profiles").update(u).eq("id",myProfile?.id);if(error)throw error;m.className="status ok";m.textContent="Saved!";refresh()}catch(e){m.textContent=e.code==="23505"?"That username is already taken.":e.message}}}
 async function openGDP(){
   page="gdp";
-  $("pageTitle").textContent="GDP Calculator";
+  $("pageTitle").textContent="GDP Calculator — Vorasnia";
   $("backBtn").style.display="";
   $("backBtn").onclick=()=>history.length>1?history.back():go("/");
   setHome(false);
@@ -540,8 +540,12 @@ async function openGDP(){
   const monthAgo=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
   const inp='style="padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:inherit;font:inherit;width:100%;box-sizing:border-box"';
   $("feed").innerHTML=`<div style="padding:16px">
-    <div style="font-size:24px;font-weight:800">GDP Calculator</div>
-    <div class="small" style="margin:4px 0 16px">GDP = C + I + G + (X − M). <b>C</b> is auto-calculated from business accounts' posts' views in the date range. Type in <b>G</b>, <b>I</b>, <b>X</b>, <b>M</b> below.</div>
+    <div style="font-size:24px;font-weight:800">GDP Calculator — Vorasnia</div>
+    <div class="small" style="margin:4px 0 16px">GDP = C + I + G + (X − M). All values come from <b>Vorasnia business accounts</b> in the date range.<br>
+    <b>C</b> = Vorasnian views on Vorasnia business posts (auto).<br>
+    <b>X</b> = foreign views on Vorasnia business posts (auto).<br>
+    <b>M</b> = Vorasnian views on Gaul/USA business posts (auto).<br>
+    Type in <b>G</b> and <b>I</b> below.</div>
 
     <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px">
       <div><label class="small">Start date</label><input type="date" id="gdpStart" value="${monthAgo}" ${inp}></div>
@@ -551,8 +555,6 @@ async function openGDP(){
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
       <div class="field"><label>G — Government budget</label><input type="number" id="gdpG" value="0" min="0" step="any" placeholder="e.g. 5000000" ${inp}></div>
       <div class="field"><label>I — Investments</label><input type="number" id="gdpI" value="0" min="0" step="any" placeholder="e.g. 1000000" ${inp}></div>
-      <div class="field"><label>X — Exports</label><input type="number" id="gdpX" value="0" min="0" step="any" placeholder="e.g. 2000000" ${inp}></div>
-      <div class="field"><label>M — Imports</label><input type="number" id="gdpM" value="0" min="0" step="any" placeholder="e.g. 1500000" ${inp}></div>
     </div>
 
     <button class="primary" id="gdpCalc">Determine GDP</button>
@@ -564,40 +566,38 @@ async function openGDP(){
     if(!s||!e){alert("Select both dates.");return}
     const g=Number($("gdpG").value)||0;
     const i=Number($("gdpI").value)||0;
-    const x=Number($("gdpX").value)||0;
-    const m=Number($("gdpM").value)||0;
     $("gdpCalc").disabled=true;
     $("gdpCalc").textContent="Calculating…";
     $("gdpResult").innerHTML='<div class="empty">Calculating GDP… This may take a moment.</div>';
     try{
-      const {data,error}=await sb.rpc("calculate_gdp",{p_start:s,p_end:e,p_government:g,p_investment:i,p_exports:x,p_imports:m});
+      const {data,error}=await sb.rpc("calculate_gdp",{p_start:s,p_end:e,p_government:g,p_investment:i});
       if(error)throw new Error(error.message);
       const r=data;
       const fmtV=v=>Number(v).toLocaleString("en-US")+" VRA";
       $("gdpResult").innerHTML=`
         <div style="border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px;text-align:center">
-          <div class="small">GDP Total</div>
+          <div class="small">Vorasnia GDP Total</div>
           <div style="font-size:40px;font-weight:900;margin:8px 0">${fmtV(r.gdp)}</div>
           <div class="small">${s} to ${e}</div>
-          <div class="small" style="margin-top:8px">From ${r.post_count||0} business posts · ${fmtN(r.total_views||0)} total views</div>
+          <div class="small" style="margin-top:8px">From ${r.post_count||0} Vorasnia business posts · ${fmtN(r.total_views||0)} total views</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
           ${[
-            ["C — Consumption",r.consumption,"Auto-calculated from business post views"],
+            ["C — Consumption",r.consumption,"Vorasnian views on Vorasnia business posts"],
             ["I — Investment",r.investment,"Admin-entered"],
             ["G — Government",r.government,"Admin-entered"],
-            ["X − M — Trade",r.exports-r.imports,"X: "+fmtV(r.exports)+" · M: "+fmtV(r.imports)]
+            ["X − M — Net Trade",r.exports-r.imports,"X: "+fmtV(r.exports)+" (foreign views on Vorasnia posts) · M: "+fmtV(r.imports)+" (Vorasnian views on foreign posts)"]
           ].map(([label,val,sub])=>`<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><div class="small">${label}</div><div style="font-size:20px;font-weight:800;margin-top:4px">${fmtV(val)}</div><div class="small" style="margin-top:4px">${sub}</div></div>`).join("")}
         </div>
         ${r.companies&&r.companies.length>0?`
-          <h3 style="margin:20px 0 8px">Company Revenue (C breakdown)</h3>
+          <h3 style="margin:20px 0 8px">Vorasnia Company Revenue</h3>
           <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
-            ${r.companies.map((c,idx)=>`<div style="display:flex;justify-content:space-between;padding:12px 16px;${idx>0?"border-top:1px solid var(--line)":""}"><div><a href="/@${safe(c.username)}" style="color:inherit;font-weight:700">${safe(c.name)}</a><div class="small">${c.post_count||0} posts · ${fmtN(c.total_views||0)} views</div></div><div style="text-align:right"><b>${fmtV(c.total)}</b></div></div>`).join("")}
+            ${r.companies.map((c,idx)=>`<div style="display:flex;justify-content:space-between;padding:12px 16px;${idx>0?"border-top:1px solid var(--line)":""}"><div><a href="/@${safe(c.username)}" style="color:inherit;font-weight:700">${safe(c.name)}</a><div class="small">${c.post_count||0} posts · ${fmtN(c.total_views||0)} views · C: ${fmtV(c.consumption)} · X: ${fmtV(c.exports)}</div></div><div style="text-align:right"><b>${fmtV(c.total)}</b></div></div>`).join("")}
           </div>
-        `:"<div class='small' style='padding:12px'>No business account posts in this period. Mark accounts as business in their admin panel to include them.</div>"}
+        `:"<div class='small' style='padding:12px'>No Vorasnia business posts in this period. Mark accounts as business in their admin panel to include them.</div>"}
       `;
-    }catch(e){
-      $("gdpResult").innerHTML=`<div class="empty">${safe(e.message||"Calculation failed.")}</div>`;
+    }catch(err){
+      $("gdpResult").innerHTML=`<div class="empty">${safe(err.message||"Calculation failed.")}</div>`;
     }finally{
       $("gdpCalc").disabled=false;
       $("gdpCalc").textContent="Determine GDP";
