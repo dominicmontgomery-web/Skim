@@ -1,11 +1,11 @@
 // ============================================================
 // api/discordpost.js  —  Vercel serverless function
 // Discord embed layout:
-//   [avatar] Display Name 🏛️
+//   [avatar] Display Name                    [badge PNG]
 //            @username · 1,234 Followers
 //            Post content here...
-//            [image if any]
-//   ❤️ 5,432  👀 89,001
+//            [post image if any]
+//   ❤️ 42   👀 130
 //
 // Required Vercel env vars:
 //   SKIM_WEBHOOK_SECRET
@@ -81,27 +81,31 @@ export default async function handler(req, res) {
     const authorId = author.id;
     const country = author.country || 'vorasnia';
 
-    // ---- 5. Fetch author's follower count + total likes/views ----
-    let followers = 0, likesTotal = 0, viewsTotal = 0;
+    // ---- 5. Fetch author's follower count + THIS post's likes/views ----
+    let followers = 0, likeCount = 0, viewCount = 0;
     if (authorId) {
-      const [statsResp, totalsResp] = await Promise.all([
-        fetch(`${supabaseUrl}/rest/v1/profile_stats?id=eq.${encodeURIComponent(authorId)}&select=followers&limit=1`, { headers: sbHeaders }),
-        fetch(`${supabaseUrl}/rest/v1/rpc/get_user_totals`, {
-          method: 'POST',
-          headers: { ...sbHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ p_user_id: authorId }),
-        }),
-      ]);
+      const statsResp = await fetch(
+        `${supabaseUrl}/rest/v1/profile_stats?id=eq.${encodeURIComponent(authorId)}&select=followers&limit=1`,
+        { headers: sbHeaders }
+      );
       try {
         const statsData = await statsResp.json();
         if (Array.isArray(statsData) && statsData[0]) followers = statsData[0].followers || 0;
       } catch (e) {}
-      try {
-        const totalsData = await totalsResp.json();
-        likesTotal = totalsData?.likes || 0;
-        viewsTotal = totalsData?.views || 0;
-      } catch (e) {}
     }
+
+    // Fetch THIS post's likes and views from post_stats
+    const postStatsResp = await fetch(
+      `${supabaseUrl}/rest/v1/post_stats?post_id=eq.${encodeURIComponent(post_id)}&select=like_count,views&limit=1`,
+      { headers: sbHeaders }
+    );
+    try {
+      const psData = await postStatsResp.json();
+      if (Array.isArray(psData) && psData[0]) {
+        likeCount = Number(psData[0].like_count) || 0;
+        viewCount = Number(psData[0].views) || 0;
+      }
+    } catch (e) {}
 
     // ---- 6. Pick webhook(s) ----
     const globalWebhook = process.env.DISCORD_WEBHOOK_URL;
@@ -122,12 +126,10 @@ export default async function handler(req, res) {
     const content = (post.content || '').slice(0, 1800);
     const images = (post.images || []).filter(u => !isVid(u));
 
-    // Verified badge emoji (Discord can't render custom badge PNGs inline)
-    const badgeEmoji =
-      author.verified_type === 'gray'  ? ' 🏛️' :   // government
-      author.verified_type === 'gold'  ? ' 🏅' :   // organization
-      author.verified_type === 'blue'  ? ' ☑️' :   // verified
-      '';
+    // Badge image URL from your site's /badges/ folder
+    const badgeImg = author.verified_type
+      ? `${siteUrl}/badges/${author.verified_type}.png`
+      : null;
 
     // Embed color based on badge type
     const embedColor =
@@ -137,12 +139,12 @@ export default async function handler(req, res) {
       0x1D9BF0;
 
     const authorName = author.display_name || author.username || 'Unknown';
-    const handleLine = `@${author.username || ''} · ${followers.toLocaleString()} Followers`;
-    const footerLine = `❤️ ${Number(likesTotal).toLocaleString()}   👀 ${Number(viewsTotal).toLocaleString()}`;
+    const handleLine = `@${author.username || ''} · ${Number(followers).toLocaleString()} Followers`;
+    const footerLine = `❤️ ${Number(likeCount).toLocaleString()}   👀 ${Number(viewCount).toLocaleString()}`;
 
     const embed = {
       author: {
-        name: `${authorName}${badgeEmoji}`,
+        name: authorName,
         url: `${siteUrl}/@${author.username || ''}`,
         ...(author.avatar_url ? { icon_url: author.avatar_url } : {}),
       },
@@ -155,6 +157,12 @@ export default async function handler(req, res) {
       color: embedColor,
     };
 
+    // Badge PNG as thumbnail (appears on the right side of the embed)
+    if (badgeImg) {
+      embed.thumbnail = { url: badgeImg };
+    }
+
+    // First image from the post
     if (images.length > 0) {
       embed.image = { url: images[0] };
     }
@@ -186,7 +194,7 @@ export default async function handler(req, res) {
     }));
 
     const allOk = results.every(r => r.ok);
-    console.log('[discordpost] sent:', { post_id, country, followers, likesTotal, viewsTotal, results });
+    console.log('[discordpost] sent:', { post_id, country, followers, likeCount, viewCount, badge: author.verified_type, results });
     return res.status(allOk ? 200 : 502).json({ ok: allOk, country, results });
   } catch (err) {
     console.error('[discordpost] error:', err);
