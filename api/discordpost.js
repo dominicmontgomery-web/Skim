@@ -126,10 +126,12 @@ export default async function handler(req, res) {
     const content = (post.content || '').slice(0, 1800);
     const images = (post.images || []).filter(u => !isVid(u));
 
-    // Badge image URL from your site's /badges/ folder
-    const badgeImg = author.verified_type
-      ? `${siteUrl}/badges/${author.verified_type}.png`
-      : null;
+    // Custom Discord emoji from your server (inline, right after the name)
+    const badgeEmoji =
+      author.verified_type === 'blue'  ? ' <:Blueverificationbadge:1568692966724341983>' :
+      author.verified_type === 'gray'  ? ' <:governmentbadge:1568591410876260453>' :
+      author.verified_type === 'gold'  ? ' <:goldverificationbadge:1568693021564739755>' :
+      '';
 
     // Embed color based on badge type
     const embedColor =
@@ -144,7 +146,7 @@ export default async function handler(req, res) {
 
     const embed = {
       author: {
-        name: authorName,
+        name: `${authorName}${badgeEmoji}`,
         url: `${siteUrl}/@${author.username || ''}`,
         ...(author.avatar_url ? { icon_url: author.avatar_url } : {}),
       },
@@ -156,11 +158,6 @@ export default async function handler(req, res) {
       },
       color: embedColor,
     };
-
-    // Badge PNG as thumbnail (appears on the right side of the embed)
-    if (badgeImg) {
-      embed.thumbnail = { url: badgeImg };
-    }
 
     // First image from the post
     if (images.length > 0) {
