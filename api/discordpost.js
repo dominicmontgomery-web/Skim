@@ -141,12 +141,13 @@ export default async function handler(req, res) {
       0x1D9BF0;
 
     const authorName = author.display_name || author.username || 'Unknown';
-    const handleLine = `@${author.username || ''} · ${Number(followers).toLocaleString()} Followers`;
+    const badgePrefix = badgeEmoji ? badgeEmoji.trim() + ' ' : '';
+    const handleLine = `${badgePrefix}@${author.username || ''} · ${Number(followers).toLocaleString()} Followers`;
     const footerLine = `❤️ ${Number(likeCount).toLocaleString()}   👀 ${Number(viewCount).toLocaleString()}`;
 
     const embed = {
       author: {
-        name: `${authorName}${badgeEmoji}`,
+        name: authorName,
         url: `${siteUrl}/@${author.username || ''}`,
         ...(author.avatar_url ? { icon_url: author.avatar_url } : {}),
       },
