@@ -453,9 +453,8 @@ function emojiPicker(anchor,ta){document.getElementById("emojiP")?.remove();cons
 if($("emojiBtn"))$("emojiBtn").onclick=()=>emojiPicker($("emojiBtn"),$("postText"));
 function toast(t){const d=document.createElement("div");d.textContent=t;d.style.cssText="position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#1d9bf0;color:#fff;padding:10px 18px;border-radius:8px;z-index:60;font-weight:700";document.body.append(d);setTimeout(()=>d.remove(),2000)}
 const fmtCnt=n=>{n=Number(n)||0;if(n<1000)return String(n);if(n<10000)return(n/1000).toFixed(1).replace(/\.0$/,'')+'k';if(n<1000000)return Math.floor(n/1000)+'k';if(n<10000000)return(n/1000000).toFixed(1).replace(/\.0$/,'')+'M';return Math.floor(n/1000000)+'M'};
-async function copyPost(p){if(!p)return;const a=p.profiles||{};const url=location.origin+"/post/"+p.id;const name=a.display_name||a.username||"Unknown";const handle=a.username?"@"+a.username:"";const txt=(p.content||"").trim();let fol="";if(sb&&a.id)try{const{data:ps}=await sb.from("profile_stats").select("followers").eq("id",a.id).maybeSingle();if(ps)fol=fmtCnt(ps.followers||0)}catch(e){}const text=`${name}
+async function copyPost(p){if(!p)return;const a=p.profiles||{};const url=location.origin+"/post/"+(p.short_id||p.id);const name=a.display_name||a.username||"Unknown";const handle=a.username?"@"+a.username:"";const txt=(p.content||"").trim();let fol="";if(sb&&a.id)try{const{data:ps}=await sb.from("profile_stats").select("followers").eq("id",a.id).maybeSingle();if(ps)fol=fmtCnt(ps.followers||0)}catch(e){}const badge=a.verified_type==="blue"?" <:Blueverificationbadge:1568692966724341983>":a.verified_type==="gray"?" <:governmentbadge:1568591410876260453>":a.verified_type==="gold"?" <:goldverificationbadge:1568693021564739755>":"";const text=`**${name}**${badge}\n${handle}${fol?" · "+fol+" Followers":""}\n\n${txt}\n\n❤️ ${fmtCnt(p.like_count||0)}   👀 ${fmtCnt(p.views||0)}\n${url}`;navigator.clipboard.writeText(text).then(()=>toast("Post copied!"),()=>prompt("Copy this post:",text))}
 ${handle}${fol?" · "+fol+" Followers":""}
-
 ${txt}
 
 ❤️ ${fmtCnt(p.like_count||0)}   👀 ${fmtCnt(p.views||0)}
