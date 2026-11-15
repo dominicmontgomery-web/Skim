@@ -1,6 +1,6 @@
 // ============================================================
 // api/discordpost.js  —  Vercel serverless function
-// hmm
+// hmmm
 // Flow:
 //   1. User posts in Skim
 //   2. Supabase trigger fires on posts INSERT
