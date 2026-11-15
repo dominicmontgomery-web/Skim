@@ -163,7 +163,7 @@ export default async function handler(req, res) {
           ? { icon_url: badgeCdnUrl }
           : author.avatar_url ? { icon_url: author.avatar_url } : {}),
       },
-      description: `${handleLine}\n\n${content}`,
+      description: `${handleLine}\n\n${content}\n\n\u200B`,
       timestamp: post.created_at,
       footer: {
         text: footerLine,
