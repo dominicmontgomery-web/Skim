@@ -1,17 +1,14 @@
 // ============================================================
 // api/discordpost.js  —  Vercel serverless function
 // Discord embed layout:
-//
-//   Dominic Montgomery<:badge:>        [avatar thumbnail]
-//   @username · 1,234 Followers
-//   Post content here...
-//   [post image if any]
+//   [badge] Dominic Montgomery          [avatar thumbnail]
+//           @username · 1,234 Followers
+//           Post content here...
+//           [post image if any]
 //   ❤️ 42   👀 130
 //
-// The name + badge are in the TITLE field (bold, clickable,
-// and supports custom emoji — unlike author.name).
-// The badge emoji sits right after the name with no gap.
-// Avatar goes to the thumbnail slot on the right.
+// Badge = author.icon_url (small icon next to name, natural space)
+// Avatar = thumbnail (right side)
 //
 // Required Vercel env vars:
 //   SKIM_WEBHOOK_SECRET
@@ -129,12 +126,13 @@ export default async function handler(req, res) {
     const content = (post.content || '').slice(0, 1800);
     const images = (post.images || []).filter(u => !isVid(u));
 
-    // Custom emoji — NO leading space so the badge sits right against the name
-    const badgeEmoji =
-      author.verified_type === 'blue'  ? '<:Blueverificationbadge:1568692966724341983>' :
-      author.verified_type === 'gray'  ? '<:governmentbadge:1568591410876260453>' :
-      author.verified_type === 'gold'  ? '<:goldverificationbadge:1568693021564739755>' :
-      '';
+    // Badge CDN URL — used as author.icon_url so it appears as a small icon
+    // right next to the name, with Discord's natural spacing
+    const badgeEmojiId =
+      author.verified_type === 'blue'  ? '1568692966724341983' :
+      author.verified_type === 'gray'  ? '1568591410876260453' :
+      author.verified_type === 'gold'  ? '1568693021564739755' : null;
+    const badgeCdnUrl = badgeEmojiId ? `https://cdn.discordapp.com/emojis/${badgeEmojiId}.png` : null;
 
     // Embed color based on badge type
     const embedColor =
@@ -148,10 +146,15 @@ export default async function handler(req, res) {
     const footerLine = `❤️ ${Number(likeCount).toLocaleString()}   👀 ${Number(viewCount).toLocaleString()}`;
 
     const embed = {
-      // Title supports custom emoji (author.name does not)
-      // Name + badge sit on the same line, badge right after name, no gap
-      title: `${authorName}${badgeEmoji}`,
-      url: `${siteUrl}/@${author.username || ''}`,
+      author: {
+        name: authorName,
+        url: `${siteUrl}/@${author.username || ''}`,
+        // VERIFIED: badge shows as the small icon next to the name (natural space)
+        // NOT VERIFIED: avatar shows as the icon
+        ...(badgeCdnUrl
+          ? { icon_url: badgeCdnUrl }
+          : author.avatar_url ? { icon_url: author.avatar_url } : {}),
+      },
       description: `${handleLine}\n\n${content}`,
       timestamp: post.created_at,
       footer: {
@@ -161,8 +164,8 @@ export default async function handler(req, res) {
       color: embedColor,
     };
 
-    // Avatar as thumbnail (right side of the embed)
-    if (author.avatar_url) {
+    // VERIFIED accounts: avatar goes to the right side as thumbnail
+    if (badgeCdnUrl && author.avatar_url) {
       embed.thumbnail = { url: author.avatar_url };
     }
 
