@@ -1,11 +1,15 @@
 // ============================================================
 // api/discordpost.js  —  Vercel serverless function
 // Discord embed layout:
-//   [avatar] Display Name                    [badge PNG]
-//            @username · 1,234 Followers
-//            Post content here...
-//            [post image if any]
+//   [badge] Display Name            [avatar thumbnail]
+//           @username · 1,234 Followers
+//           Post content here...
+//           [post image if any]
 //   ❤️ 42   👀 130
+//
+// The badge appears as a small icon RIGHT NEXT TO the name
+// (using author.icon_url with the Discord emoji CDN URL).
+// The avatar moves to the thumbnail slot on the right.
 //
 // Required Vercel env vars:
 //   SKIM_WEBHOOK_SECRET
@@ -13,8 +17,6 @@
 //   SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY)
 //   DISCORD_WEBHOOK_VORASNIA / GAUL / USA (or DISCORD_WEBHOOK_URL for all)
 //   SITE_URL (optional)
-//
-// File path in your repo: api/discordpost.js
 // ============================================================
 
 export default async function handler(req, res) {
@@ -94,7 +96,6 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
 
-    // Fetch THIS post's likes and views from post_stats
     const postStatsResp = await fetch(
       `${supabaseUrl}/rest/v1/post_stats?post_id=eq.${encodeURIComponent(post_id)}&select=like_count,views&limit=1`,
       { headers: sbHeaders }
@@ -126,12 +127,13 @@ export default async function handler(req, res) {
     const content = (post.content || '').slice(0, 1800);
     const images = (post.images || []).filter(u => !isVid(u));
 
-    // Custom Discord emoji from your server (inline, right after the name)
-    const badgeEmoji =
-      author.verified_type === 'blue'  ? ' <:Blueverificationbadge:1568692966724341983>' :
-      author.verified_type === 'gray'  ? ' <:governmentbadge:1568591410876260453>' :
-      author.verified_type === 'gold'  ? ' <:goldverificationbadge:1568693021564739755>' :
-      '';
+    // Badge CDN URL — public, works regardless of Discord server
+    // Used as author.icon_url so it appears as a small icon RIGHT NEXT TO the name
+    const badgeEmojiId =
+      author.verified_type === 'blue'  ? '1568692966724341983' :
+      author.verified_type === 'gray'  ? '1568591410876260453' :
+      author.verified_type === 'gold'  ? '1568693021564739755' : null;
+    const badgeCdnUrl = badgeEmojiId ? `https://cdn.discordapp.com/emojis/${badgeEmojiId}.png` : null;
 
     // Embed color based on badge type
     const embedColor =
@@ -141,15 +143,18 @@ export default async function handler(req, res) {
       0x1D9BF0;
 
     const authorName = author.display_name || author.username || 'Unknown';
-    const badgePrefix = badgeEmoji ? badgeEmoji.trim() + ' ' : '';
-    const handleLine = `${badgePrefix}@${author.username || ''} · ${Number(followers).toLocaleString()} Followers`;
+    const handleLine = `@${author.username || ''} · ${Number(followers).toLocaleString()} Followers`;
     const footerLine = `❤️ ${Number(likeCount).toLocaleString()}   👀 ${Number(viewCount).toLocaleString()}`;
 
     const embed = {
       author: {
         name: authorName,
         url: `${siteUrl}/@${author.username || ''}`,
-        ...(author.avatar_url ? { icon_url: author.avatar_url } : {}),
+        // VERIFIED: badge shows as the small icon next to the name
+        // NOT VERIFIED: avatar shows as the icon (original behavior)
+        ...(badgeCdnUrl
+          ? { icon_url: badgeCdnUrl }
+          : author.avatar_url ? { icon_url: author.avatar_url } : {}),
       },
       description: `${handleLine}\n\n${content}`,
       timestamp: post.created_at,
@@ -160,7 +165,12 @@ export default async function handler(req, res) {
       color: embedColor,
     };
 
-    // First image from the post
+    // VERIFIED accounts: avatar goes to the right side as thumbnail
+    if (badgeCdnUrl && author.avatar_url) {
+      embed.thumbnail = { url: author.avatar_url };
+    }
+
+    // First image from the post (large, below content)
     if (images.length > 0) {
       embed.image = { url: images[0] };
     }
