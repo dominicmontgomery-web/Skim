@@ -141,9 +141,17 @@ export default async function handler(req, res) {
       author.verified_type === 'blue'  ? 0x1D9BF0 :
       0x1D9BF0;
 
+    const fmtCount = n => {
+      n = Number(n) || 0;
+      if (n < 1000) return String(n);
+      if (n < 10000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+      if (n < 1000000) return Math.floor(n / 1000) + 'k';
+      if (n < 10000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      return Math.floor(n / 1000000) + 'M';
+    };
     const authorName = author.display_name || author.username || 'Unknown';
-    const handleLine = `@${author.username || ''} · ${Number(followers).toLocaleString()} Followers`;
-    const footerLine = `❤️ ${Number(likeCount).toLocaleString()}   👀 ${Number(viewCount).toLocaleString()}`;
+    const handleLine = `@${author.username || ''} · ${fmtCount(followers)} Followers`;
+    const footerLine = `❤️ ${fmtCount(likeCount)}   👀 ${fmtCount(viewCount)}`;
 
     const embed = {
       author: {
