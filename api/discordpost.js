@@ -39,7 +39,6 @@ export default async function handler(req, res) {
     });
     return res.status(401).json({ error: 'Unauthorized' });
   }
-
   // ---- 2. Parse body ----
   let body = req.body;
   if (typeof body === 'string') {
