@@ -1,14 +1,18 @@
 // ============================================================
-// discordpost.js  —  Updated with account-specific channel routing
+// api/discordpost.js  —  Vercel serverless function
 //
-// New env vars to add in Vercel:
-//   DISCORD_WEBHOOK_PM_RESIDENCE  — PM's residence channel webhook URL
-//   DISCORD_WEBHOOK_GOVERNMENT    — Government channel webhook URL
+// Country webhooks → show as "Skim" (username + avatar override)
+// Assigned channel webhooks → use the webhook's own configured
+//   name and avatar (no override sent)
 //
-// The API now:
-//   1. Sends to the country webhook (as before)
-//   2. ALSO sends to any channels assigned to the author
-//      via the account_webhooks table
+// Required Vercel env vars:
+//   SKIM_WEBHOOK_SECRET
+//   SUPABASE_URL
+//   SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY)
+//   DISCORD_WEBHOOK_VORASNIA / GAUL / USA (or DISCORD_WEBHOOK_URL)
+//   DISCORD_WEBHOOK_PM_RESIDENCE (optional, for assigned channels)
+//   DISCORD_WEBHOOK_GOVERNMENT (optional, for assigned channels)
+//   SITE_URL (optional)
 // ============================================================
 
 export default async function handler(req, res) {
@@ -72,7 +76,7 @@ export default async function handler(req, res) {
     const authorId = author.id;
     const country = author.country || 'vorasnia';
 
-    // ---- Fetch followers + post stats + ASSIGNED CHANNELS ----
+    // ---- Fetch followers + post stats + assigned channels ----
     let followers = 0, likeCount = 0, viewCount = 0;
     let assignedChannels = [];
 
@@ -104,38 +108,38 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
 
-    // ---- Build webhook list: country routing + assigned channels ----
+    // ---- Build webhook list ----
+    // Each webhook has a flag: useSkimIdentity
+    //   true  → override with username:"Skim" + Skim logo (country routing)
+    //   false → use the webhook's own configured name & avatar (assigned channels)
     const webhooks = [];
 
-    // 1. Country routing (as before)
     const globalWebhook = process.env.DISCORD_WEBHOOK_URL;
     const countryWebhook =
       country === 'gaul'  ? process.env.DISCORD_WEBHOOK_GAUL  :
       country === 'usa'   ? process.env.DISCORD_WEBHOOK_USA   :
                             process.env.DISCORD_WEBHOOK_VORASNIA;
-    if (globalWebhook)      webhooks.push(globalWebhook);
-    else if (countryWebhook) webhooks.push(countryWebhook);
 
-    // 2. Account-specific channels (from account_webhooks table)
+    if (globalWebhook)      webhooks.push({ url: globalWebhook, useSkimIdentity: true });
+    else if (countryWebhook) webhooks.push({ url: countryWebhook, useSkimIdentity: true });
+
     for (const key of assignedChannels) {
       const envVar = `DISCORD_WEBHOOK_${key.toUpperCase()}`;
       const url = process.env[envVar];
-      if (url) {
-        // Avoid duplicates (if the same URL is already in the list)
-        if (!webhooks.includes(url)) {
-          webhooks.push(url);
-        }
-      } else {
+      if (url && !webhooks.find(w => w.url === url)) {
+        // Assigned channels: no identity override → uses webhook's own name & avatar
+        webhooks.push({ url, useSkimIdentity: false });
+      } else if (!url) {
         console.warn(`[discordpost] channel "${key}" assigned but env var ${envVar} not set`);
       }
     }
 
     if (webhooks.length === 0) {
-      console.log('[discordpost] no webhook configured for country:', country, 'or assigned channels:', assignedChannels);
+      console.log('[discordpost] no webhook configured');
       return res.status(200).json({ ok: true, message: 'No webhook configured', country, assignedChannels });
     }
 
-    // ---- Build Discord embed ----
+    // ---- Build the embed (same for all webhooks) ----
     const isVid = u => /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(u || '');
     const content = (post.content || '').slice(0, 1800);
     const images = (post.images || []).filter(u => !isVid(u));
@@ -190,18 +194,22 @@ export default async function handler(req, res) {
       embed.image = { url: images[0] };
     }
 
-    const payload = {
-      username: 'Skim',
-      avatar_url: `${siteUrl}/logo.png`,
-      embeds: [embed],
-    };
+    // ---- Send to each webhook with appropriate identity ----
+    const results = await Promise.all(webhooks.map(async ({ url, useSkimIdentity }) => {
+      // Build payload: override identity only for country webhooks
+      const payload = {
+        embeds: [embed],
+        ...(useSkimIdentity
+          ? { username: 'Skim', avatar_url: `${siteUrl}/logo.png` }
+          : {}  // assigned channels: no override → uses webhook's own name & avatar
+        ),
+      };
 
-    for (let i = 1; i < Math.min(images.length, 4); i++) {
-      payload.embeds.push({ image: { url: images[i] } });
-    }
+      // Add extra images as separate embeds
+      for (let i = 1; i < Math.min(images.length, 4); i++) {
+        payload.embeds.push({ image: { url: images[i] } });
+      }
 
-    // ---- Send to ALL webhooks (country + assigned) ----
-    const results = await Promise.all(webhooks.map(async (url) => {
       try {
         const r = await fetch(url, {
           method: 'POST',
@@ -209,9 +217,9 @@ export default async function handler(req, res) {
           body: JSON.stringify(payload),
         });
         const errText = r.ok ? '' : await r.text().catch(() => '');
-        return { ok: r.ok, status: r.status, error: errText };
+        return { ok: r.ok, status: r.status, error: errText, useSkimIdentity };
       } catch (e) {
-        return { ok: false, status: 0, error: e.message };
+        return { ok: false, status: 0, error: e.message, useSkimIdentity };
       }
     }));
 
