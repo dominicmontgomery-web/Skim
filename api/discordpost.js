@@ -1,21 +1,14 @@
 // ============================================================
-// api/discordpost.js  —  Vercel serverless function
-// Discord embed layout:
-//   [badge] Dominic Montgomery          [avatar thumbnail]
-//           @username · 1,234 Followers
-//           Post content here...
-//           [post image if any]
-//   ❤️ 42   👀 130
+// discordpost.js  —  Updated with account-specific channel routing
 //
-// Badge = author.icon_url (small icon next to name, natural space)
-// Avatar = thumbnail (right side)
+// New env vars to add in Vercel:
+//   DISCORD_WEBHOOK_PM_RESIDENCE  — PM's residence channel webhook URL
+//   DISCORD_WEBHOOK_GOVERNMENT    — Government channel webhook URL
 //
-// Required Vercel env vars:
-//   SKIM_WEBHOOK_SECRET
-//   SUPABASE_URL
-//   SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY)
-//   DISCORD_WEBHOOK_VORASNIA / GAUL / USA (or DISCORD_WEBHOOK_URL for all)
-//   SITE_URL (optional)
+// The API now:
+//   1. Sends to the country webhook (as before)
+//   2. ALSO sends to any channels assigned to the author
+//      via the account_webhooks table
 // ============================================================
 
 export default async function handler(req, res) {
@@ -23,7 +16,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // ---- 1. Verify secret ----
   const secret = req.headers['x-skim-secret'];
   const expectedSecret = process.env.SKIM_WEBHOOK_SECRET;
   if (!expectedSecret || secret !== expectedSecret) {
@@ -31,7 +23,6 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // ---- 2. Parse body ----
   let body = req.body;
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch (e) { body = {}; }
@@ -41,7 +32,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing post_id' });
   }
 
-  // ---- 3. Supabase credentials ----
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -59,7 +49,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    // ---- 4. Fetch the post + author profile ----
+    // ---- Fetch the post + author profile ----
     const select = 'id,content,images,created_at,author_id,profiles:profiles!posts_author_id_fkey(id,username,display_name,avatar_url,verified_type,country)';
     const resp = await fetch(
       `${supabaseUrl}/rest/v1/posts?id=eq.${encodeURIComponent(post_id)}&select=${encodeURIComponent(select)}`,
@@ -82,59 +72,80 @@ export default async function handler(req, res) {
     const authorId = author.id;
     const country = author.country || 'vorasnia';
 
-    // ---- 5. Fetch author's follower count + THIS post's likes/views ----
+    // ---- Fetch followers + post stats + ASSIGNED CHANNELS ----
     let followers = 0, likeCount = 0, viewCount = 0;
+    let assignedChannels = [];
+
     if (authorId) {
-      const statsResp = await fetch(
-        `${supabaseUrl}/rest/v1/profile_stats?id=eq.${encodeURIComponent(authorId)}&select=followers&limit=1`,
-        { headers: sbHeaders }
-      );
+      const [statsResp, postStatsResp, channelsResp] = await Promise.all([
+        fetch(`${supabaseUrl}/rest/v1/profile_stats?id=eq.${encodeURIComponent(authorId)}&select=followers&limit=1`, { headers: sbHeaders }),
+        fetch(`${supabaseUrl}/rest/v1/post_stats?post_id=eq.${encodeURIComponent(post_id)}&select=like_count,views&limit=1`, { headers: sbHeaders }),
+        fetch(`${supabaseUrl}/rest/v1/account_webhooks?profile_id=eq.${encodeURIComponent(authorId)}&select=channel_key`, { headers: sbHeaders }),
+      ]);
+
       try {
         const statsData = await statsResp.json();
         if (Array.isArray(statsData) && statsData[0]) followers = statsData[0].followers || 0;
       } catch (e) {}
+
+      try {
+        const psData = await postStatsResp.json();
+        if (Array.isArray(psData) && psData[0]) {
+          likeCount = Number(psData[0].like_count) || 0;
+          viewCount = Number(psData[0].views) || 0;
+        }
+      } catch (e) {}
+
+      try {
+        const chData = await channelsResp.json();
+        if (Array.isArray(chData)) {
+          assignedChannels = chData.map(c => c.channel_key);
+        }
+      } catch (e) {}
     }
 
-    const postStatsResp = await fetch(
-      `${supabaseUrl}/rest/v1/post_stats?post_id=eq.${encodeURIComponent(post_id)}&select=like_count,views&limit=1`,
-      { headers: sbHeaders }
-    );
-    try {
-      const psData = await postStatsResp.json();
-      if (Array.isArray(psData) && psData[0]) {
-        likeCount = Number(psData[0].like_count) || 0;
-        viewCount = Number(psData[0].views) || 0;
-      }
-    } catch (e) {}
+    // ---- Build webhook list: country routing + assigned channels ----
+    const webhooks = [];
 
-    // ---- 6. Pick webhook(s) ----
+    // 1. Country routing (as before)
     const globalWebhook = process.env.DISCORD_WEBHOOK_URL;
     const countryWebhook =
       country === 'gaul'  ? process.env.DISCORD_WEBHOOK_GAUL  :
       country === 'usa'   ? process.env.DISCORD_WEBHOOK_USA   :
                             process.env.DISCORD_WEBHOOK_VORASNIA;
-    const webhooks = [];
     if (globalWebhook)      webhooks.push(globalWebhook);
     else if (countryWebhook) webhooks.push(countryWebhook);
-    if (webhooks.length === 0) {
-      console.log('[discordpost] no webhook configured for country:', country);
-      return res.status(200).json({ ok: true, message: 'No webhook configured', country });
+
+    // 2. Account-specific channels (from account_webhooks table)
+    for (const key of assignedChannels) {
+      const envVar = `DISCORD_WEBHOOK_${key.toUpperCase()}`;
+      const url = process.env[envVar];
+      if (url) {
+        // Avoid duplicates (if the same URL is already in the list)
+        if (!webhooks.includes(url)) {
+          webhooks.push(url);
+        }
+      } else {
+        console.warn(`[discordpost] channel "${key}" assigned but env var ${envVar} not set`);
+      }
     }
 
-    // ---- 7. Build Discord embed ----
+    if (webhooks.length === 0) {
+      console.log('[discordpost] no webhook configured for country:', country, 'or assigned channels:', assignedChannels);
+      return res.status(200).json({ ok: true, message: 'No webhook configured', country, assignedChannels });
+    }
+
+    // ---- Build Discord embed ----
     const isVid = u => /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(u || '');
     const content = (post.content || '').slice(0, 1800);
     const images = (post.images || []).filter(u => !isVid(u));
 
-    // Badge CDN URL — used as author.icon_url so it appears as a small icon
-    // right next to the name, with Discord's natural spacing
     const badgeEmojiId =
       author.verified_type === 'blue'  ? '1568692966724341983' :
       author.verified_type === 'gray'  ? '1568591410876260453' :
       author.verified_type === 'gold'  ? '1568693021564739755' : null;
     const badgeCdnUrl = badgeEmojiId ? `https://cdn.discordapp.com/emojis/${badgeEmojiId}.png` : null;
 
-    // Embed color based on badge type
     const embedColor =
       author.verified_type === 'gray'  ? 0x829AAB :
       author.verified_type === 'gold'  ? 0xE2B719 :
@@ -149,6 +160,7 @@ export default async function handler(req, res) {
       if (n < 10000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
       return Math.floor(n / 1000000) + 'M';
     };
+
     const authorName = author.display_name || author.username || 'Unknown';
     const handleLine = `@${author.username || ''} · ${fmtCount(followers)} Followers`;
     const footerLine = `❤️ ${fmtCount(likeCount)}   👀 ${fmtCount(viewCount)}`;
@@ -157,8 +169,6 @@ export default async function handler(req, res) {
       author: {
         name: authorName,
         url: `${siteUrl}/@${author.username || ''}`,
-        // VERIFIED: badge shows as the small icon next to the name (natural space)
-        // NOT VERIFIED: avatar shows as the icon
         ...(badgeCdnUrl
           ? { icon_url: badgeCdnUrl }
           : author.avatar_url ? { icon_url: author.avatar_url } : {}),
@@ -172,12 +182,10 @@ export default async function handler(req, res) {
       color: embedColor,
     };
 
-    // VERIFIED accounts: avatar goes to the right side as thumbnail
     if (badgeCdnUrl && author.avatar_url) {
       embed.thumbnail = { url: author.avatar_url };
     }
 
-    // First image from the post (large, below content)
     if (images.length > 0) {
       embed.image = { url: images[0] };
     }
@@ -188,12 +196,11 @@ export default async function handler(req, res) {
       embeds: [embed],
     };
 
-    // Add up to 3 more images as separate embeds
     for (let i = 1; i < Math.min(images.length, 4); i++) {
       payload.embeds.push({ image: { url: images[i] } });
     }
 
-    // ---- 8. Send to Discord ----
+    // ---- Send to ALL webhooks (country + assigned) ----
     const results = await Promise.all(webhooks.map(async (url) => {
       try {
         const r = await fetch(url, {
@@ -209,8 +216,8 @@ export default async function handler(req, res) {
     }));
 
     const allOk = results.every(r => r.ok);
-    console.log('[discordpost] sent:', { post_id, country, followers, likeCount, viewCount, badge: author.verified_type, results });
-    return res.status(allOk ? 200 : 502).json({ ok: allOk, country, results });
+    console.log('[discordpost] sent:', { post_id, country, assignedChannels, webhookCount: webhooks.length, results });
+    return res.status(allOk ? 200 : 502).json({ ok: allOk, country, assignedChannels, results });
   } catch (err) {
     console.error('[discordpost] error:', err);
     return res.status(500).json({ error: err.message });
